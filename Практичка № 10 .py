@@ -1,71 +1,71 @@
 import json, os
+FILENAME = "attendance_data.json"
 
-ФАЙЛ = "attendance_data.json"
-
-class Система:
+class AttendanceSystem:
     def __init__(self):
-        self.студенты, self.посещаемость = {}, []
+        self.students, self.attendance_records = {}, []
 
-    def загрузить(self):
-        if not os.path.exists(ФАЙЛ):
-            return False
-        with open(ФАЙЛ, encoding="utf-8") as f:
+    def load(self):
+        if not os.path.exists(FILENAME): return False
+        with open(FILENAME, encoding="utf-8") as f:
             d = json.load(f)
-        self.студенты, self.посещаемость = d["студенты"], d["посещаемость"]
+        self.students = d.get("students", {})
+        self.attendance_records = d.get("attendance", [])
         return True
 
-    def сохранить(self):
-        with open(ФАЙЛ, "w", encoding="utf-8") as f:
-            json.dump({"студенты": self.студенты, "посещаемость": self.посещаемость},
-                      f, ensure_ascii=False, indent=2)
+    def save(self):
+        with open(FILENAME, "w", encoding="utf-8") as f:
+            json.dump({"students": self.students, "attendance": self.attendance_records}, f, ensure_ascii=False, indent=2)
 
-    def посещаемость_студента(self, sid):
-        recs = [r for r in self.посещаемость if r["студент_id"] == sid]
-        return (100 * sum(r["присутствовал"] for r in recs) / len(recs), len(recs)) \
-               if recs else (100.0, 0)
+    def get_student_attendance(self, sid):
+        recs = [r for r in self.attendance_records if r["student_id"] == sid]
+        if not recs: return 100.0, 0
+        return 100 * sum(r["present"] for r in recs) / len(recs), len(recs)
 
-    def все_группы(self):
-        return sorted({v["группа"] for v in self.студенты.values()})
+    def get_all_groups(self):
+        return sorted({s["group"] for s in self.students.values()})
 
-def сводка(система):
-    print(f"\n{'═' * 64}\nСВОДКА ПО ГРУППАМ И СТУДЕНТАМ\n{'═' * 64}")
-    if not система.студенты:
+def print_summary(system):
+    print("\n" + "=" * 64)
+    print("КОНТРОЛЬ ПОСЕЩАЕМОСТИ — СВОДКА ПО ГРУППАМ И СТУДЕНТАМ")
+    print("=" * 64)
+    if not system.students:
         print("  Данных нет.")
         return
-    for g in система.все_группы():
-        ids = sorted((s for s, v in система.студенты.items() if v["группа"] == g),
-                     key=lambda s: система.посещаемость_студента(s)[0], reverse=True)
-        avg = sum(система.посещаемость_студента(s)[0] for s in ids) / len(ids)
+    for g in system.get_all_groups():
+        ids = sorted((sid for sid, v in system.students.items() if v["group"] == g),
+                     key=lambda s: system.get_student_attendance(s)[0], reverse=True)
+        avg = sum(system.get_student_attendance(s)[0] for s in ids) / len(ids)
         print(f"\n  {g} — студентов: {len(ids)}, средняя посещаемость: {avg:.1f}%")
         print(f"    {'ФИО':<34}{'Занятий':>8}{'Посещаемость':>15}\n    {'-' * 57}")
         for sid in ids:
-            pct, всего = система.посещаемость_студента(sid)
-            print(f"    {система.студенты[sid]['фио']:<34}{всего:>8}{pct:>15.1f}%")
+            pct, total = system.get_student_attendance(sid)
+            print(f"    {system.students[sid]['full_name']:<34}{total:>8}{pct:>15.1f}%")
 
-МЕНЮ = """══════════════════════════════════════════════
+MENU = """
+================================================================
   КОНТРОЛЬ ПОСЕЩАЕМОСТИ — АДМИН-КОНСОЛЬ
-══════════════════════════════════════════════
+================================================================
  1 — Сводка по группам и студентам
  0 — Сохранить и выйти"""
 
-def главная():
-    система = Система()
-    if система.загрузить():
-        print(f"Данные загружены: {len(система.студенты)} студентов, {len(система.посещаемость)} отметок.")
+def main():
+    system = AttendanceSystem()
+    if system.load():
+        print(f"Данные загружены: {len(system.students)} студентов, {len(system.attendance_records)} отметок.")
     else:
         print("Файл attendance_data.json не найден.")
     while True:
-        print(МЕНЮ)
+        print(MENU)
         ch = input("Ваш выбор: ").strip()
         if ch == "1":
-            сводка(система)
+            print_summary(system)
         elif ch == "0":
-            система.сохранить()
+            system.save()
             print("Данные сохранены. До встречи!")
             break
         else:
             print("Выберите 1 или 0.")
 
-
 if __name__ == "__main__":
-    главная()
+    main()
