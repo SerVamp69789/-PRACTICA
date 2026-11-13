@@ -31,6 +31,7 @@ from attendance.reports import (
     report_bundle,
 )
 
+# Цвет строки: жёлтый — только стипендия, красный — отчисление.
 STATUS_STYLE = {
     STATUS_OK: "green",
     STATUS_ATTENTION: "cyan",
@@ -64,6 +65,7 @@ def _paint(percent: float, dataset: Dataset, label: str) -> Text:
 
 def _ordered_groups(dataset: Dataset) -> list[GroupSummary]:
     groups = list(college_summary(dataset).groups)
+    # Номера в таблице идут по коду группы, а не по проценту пропусков.
     groups.sort(key=lambda group: group.code)
     return groups
 
@@ -193,6 +195,7 @@ def _students_table(group: GroupSummary, dataset: Dataset) -> Table:
 
 def _resolve_group(dataset: Dataset, raw: str) -> GroupSummary | None:
     groups = _ordered_groups(dataset)
+    # «2» — это номер строки в таблице, «2ИП-2-25» — сам код группы.
     if raw.isdigit():
         number = int(raw)
         if 1 <= number <= len(groups):
@@ -324,6 +327,7 @@ def run_menu(dataset: Dataset) -> None:
         while True:
             _clear(console)
             render_home(console, dataset)
+            # Номер из таблицы открывает студентов, слово — отчёт, 0 — выход.
             raw = Prompt.ask("№ группы в таблице").strip()
             key = raw.casefold()
             if key == "0":

@@ -19,6 +19,7 @@ def describe_group(code: str) -> str:
     match = _CODE.match(code.strip())
     if match is None:
         return code
+    # 2ИП-2-25: курс 2, специальность ИП, группа 2, поступление в 2025 году.
     course, specialty, number, year = match.groups()
     title = SPECIALTIES.get(specialty, specialty)
     return f"{int(course)} курс группа {int(number)} {title} {2000 + int(year)} г"

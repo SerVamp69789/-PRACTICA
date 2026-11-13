@@ -17,6 +17,7 @@ def _as_bool(value, student_id: str) -> bool:
         return bool(int(value))
     if isinstance(value, str):
         text = value.strip().casefold()
+        # В таблице «был» может быть и галочкой Excel, и словами да/нет.
         if text in {"true", "да", "1", "присутствовал"}:
             return True
         if text in {"false", "нет", "0", "отсутствовал"}:
@@ -93,6 +94,7 @@ def merge_journals(base: dict, extra: dict) -> dict:
     Output: один журнал. Повтор того же студента и той же даты берётся из base.
     Why: одни и те же люди лежат в обоих файлах, а отчёт должен посчитать занятие один раз.
     """
+    # Карточка из JSON важнее: из Excel берём студента, только если его ещё нет.
     students = dict(base.get("студенты") or {})
     for student_id, info in (extra.get("студенты") or {}).items():
         students.setdefault(student_id, info)
@@ -101,6 +103,7 @@ def merge_journals(base: dict, extra: dict) -> dict:
     for record in list(base.get("посещаемость") or []) + list(extra.get("посещаемость") or []):
         if not isinstance(record, dict):
             continue
+        # Одно и то же занятие в JSON и Excel считаем один раз.
         key = (record.get("студент_id"), record.get("дата"))
         if key in seen:
             continue

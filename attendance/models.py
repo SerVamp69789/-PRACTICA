@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 
+# Пороги пропусков: 30% — отстающий, 40% — только стипендия, 50% — отчисление.
 ATTENTION_PERCENT = 30.0
 SCHOLARSHIP_PERCENT = 40.0
 EXPULSION_PERCENT = 50.0
@@ -19,6 +20,7 @@ STATUS_LABELS = {
     STATUS_EXPULSION: "отчисление",
 }
 
+# Чем больше число, тем строже мера. Отчисление включает лишение стипендии.
 STATUS_RANK = {
     STATUS_OK: 0,
     STATUS_ATTENTION: 1,
@@ -56,6 +58,7 @@ class StudentRecord:
 
     @property
     def absence_percent(self) -> float:
+        # Нет занятий — процент не из чего считать, это не 100% пропусков.
         if self.lessons_total <= 0:
             return 0.0
         return self.absences / self.lessons_total * 100.0

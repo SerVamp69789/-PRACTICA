@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         print(error, file=sys.stderr)
         return 1
 
+    # Без меню: одна группа, один отчёт или запись файлов. Иначе открывается экран.
     if args.group:
         match = next((group for group in college_summary(dataset).groups if group.code == args.group), None)
         if match is None:

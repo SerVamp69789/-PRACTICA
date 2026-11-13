@@ -20,6 +20,7 @@ def format_percent(value: float) -> str:
     Output: «70» для целого числа и «23.8» для дробного.
     Why: на экране 70.0 читается как 70.
     """
+    # 70.0 показываем как 70, дробный процент вроде 23.8 оставляем с десятой.
     rounded = round(value, 1)
     if abs(rounded - round(rounded)) < 0.05:
         return str(int(round(rounded)))
@@ -156,6 +157,7 @@ def format_lagging(dataset: Dataset) -> str:
 
 def _scholarship_parts(dataset: Dataset) -> tuple[tuple[StudentRecord, ...], tuple[StudentRecord, ...]]:
     selected = students_at_least(dataset.students, dataset.rules, STATUS_SCHOLARSHIP)
+    # Жёлтые остаются в колледже. Красные отчисляются и теряют стипендию тоже.
     only_scholarship = tuple(
         student for student in selected if classify(student.absence_percent, dataset.rules) == STATUS_SCHOLARSHIP
     )

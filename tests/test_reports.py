@@ -1,4 +1,4 @@
-"""Отчёты и чтение настоящего students.json."""
+"""Отчёты по живому журналу students.json и journal.xlsx."""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-"""Сохранение комплекта отчётов."""
+"""Запись отчётов в папку: сводка, стипендия, отчисление и файл каждой группы."""
 
 from attendance.reports import report_bundle
 from attendance.storage import load_dataset

@@ -29,6 +29,7 @@ def load_dataset(path: Path, rules=DEFAULT_RULES, excel: Path | None | str = "au
     data = _read_json(path)
     source_name = path.name
     excel_path = None
+    # Книга рядом с JSON подключается сама, отдельный флаг для этого не нужен.
     if excel == "auto":
         candidate = path.with_name("journal.xlsx")
         if candidate.is_file():

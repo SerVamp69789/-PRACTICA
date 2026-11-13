@@ -39,6 +39,7 @@ def classify(percent: float, rules: Rules) -> str:
     Output: код статуса ok / attention / scholarship / expulsion.
     Why: списки на стипендию и отчисление должны собираться одним правилом, без ручной сортировки.
     """
+    # Сначала самая строгая мера, иначе отчисленный попадёт только в стипендию.
     if percent >= rules.expulsion_percent:
         return STATUS_EXPULSION
     if percent >= rules.scholarship_percent:
@@ -79,6 +80,7 @@ def build_students(data: dict) -> tuple[tuple[StudentRecord, ...], int]:
     if not isinstance(raw_students, dict) or not isinstance(raw_attendance, list):
         raise JournalError("В журнале нужны объекты «студенты» и список «посещаемость».")
 
+    # Отдельные счётчики: сколько занятий было и сколько из них пропущено.
     lessons: dict[str, int] = {student_id: 0 for student_id in raw_students}
     absences: dict[str, int] = {student_id: 0 for student_id in raw_students}
     dates: dict[str, list[str]] = {student_id: [] for student_id in raw_students}
@@ -88,6 +90,7 @@ def build_students(data: dict) -> tuple[tuple[StudentRecord, ...], int]:
         if not isinstance(record, dict):
             raise JournalError("Запись посещаемости должна быть объектом.")
         student_id = record.get("студент_id")
+        # Чужой id не ломает журнал, но такие отметки не входят в процент.
         if student_id not in raw_students:
             skipped += 1
             continue
@@ -134,6 +137,7 @@ def group_summaries(students: tuple[StudentRecord, ...], rules: Rules) -> tuple[
     summaries = []
     for code, members in by_code.items():
         ordered = tuple(sorted(members, key=lambda item: (-item.absence_percent, item.full_name)))
+        # Процент группы считается по всем занятиям, а не как среднее процентов студентов.
         lessons = sum(item.lessons_total for item in ordered)
         missed = sum(item.absences for item in ordered)
         statuses = [classify(item.absence_percent, rules) for item in ordered]
@@ -177,6 +181,7 @@ def students_at_least(students: tuple[StudentRecord, ...], rules: Rules, min_sta
     Output: студенты этой меры и строже, по убыванию процента пропусков.
     Why: отчисление включает лишение стипендии, поэтому такие студенты входят в отчёт на стипендию. Обратное неверно: одна только стипендия до отчисления не доходит.
     """
+    # В выборку входят эта мера и все более строгие.
     minimum = STATUS_RANK[min_status]
     selected = [
         student
