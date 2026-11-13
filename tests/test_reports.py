@@ -78,7 +78,7 @@ def test_student_card_lists_absence_dates(dataset):
     student = next(item for item in dataset.students if item.full_name == "Фомин Юрий Ильич")
     card = format_student(student, dataset)
     assert "2ИП-2-25" in card
-    assert "Пропусков: 8 (80.0%)" in card
+    assert "Пропусков: 8 (80%)" in card
     assert "отчисление" in card
     assert student.absence_dates[0] in card
     assert len(student.absence_dates) == 8

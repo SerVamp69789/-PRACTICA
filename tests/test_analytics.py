@@ -135,3 +135,16 @@ def test_college_and_lists_use_same_thresholds():
     assert lagging == ["exp", "sch", "att"]
     assert scholarship == ["exp", "sch"]
     assert expulsion == ["exp"]
+
+
+def test_group_code_is_spelled_out():
+    from attendance.group_title import describe_group
+
+    assert (
+        describe_group("2ИП-2-25")
+        == "2 курс группа 2 Информационные системы и программирование 2025 г"
+    )
+    assert (
+        describe_group("2РКИ-1-25")
+        == "2 курс группа 1 Разработка компьютерных игр и дополненной виртуальной реальности 2025 г"
+    )

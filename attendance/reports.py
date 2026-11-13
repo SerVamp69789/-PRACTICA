@@ -1,6 +1,7 @@
 """Текстовые административные отчёты."""
 
 from attendance.analytics import classify, college_summary, recommendation, students_at_least
+from attendance.group_title import describe_group
 from attendance.models import (
     STATUS_ATTENTION,
     STATUS_EXPULSION,
@@ -13,8 +14,20 @@ from attendance.models import (
 )
 
 
+def format_percent(value: float) -> str:
+    """Purpose: показать процент без лишнего хвоста .0.
+    Inputs: value — процент пропусков.
+    Output: «70» для целого числа и «23.8» для дробного.
+    Why: на экране 70.0 читается как 70.
+    """
+    rounded = round(value, 1)
+    if abs(rounded - round(rounded)) < 0.05:
+        return str(int(round(rounded)))
+    return f"{rounded:.1f}"
+
+
 def _percent(value: float) -> str:
-    return f"{value:.1f}%"
+    return f"{format_percent(value)}%"
 
 
 def _rules_line(dataset: Dataset) -> str:
@@ -87,6 +100,7 @@ def format_group(group: GroupSummary, dataset: Dataset) -> str:
     Why: после выбора группы администратор смотрит людей, а не только общий процент.
     """
     lines = [
+        describe_group(group.code),
         f"ГРУППА {group.code}",
         _rules_line(dataset),
         "",

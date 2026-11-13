@@ -9,7 +9,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
-from attendance.analytics import classify, college_summary
+from attendance.analytics import classify, college_summary, students_at_least
 from attendance.models import (
     STATUS_ATTENTION,
     STATUS_EXPULSION,
@@ -19,6 +19,8 @@ from attendance.models import (
     Dataset,
     GroupSummary,
 )
+from attendance.group_title import describe_group
+from attendance.reports import format_percent
 from attendance.reports import (
     format_college,
     format_expulsion,
@@ -31,10 +33,18 @@ from attendance.reports import (
 
 STATUS_STYLE = {
     STATUS_OK: "green",
-    STATUS_ATTENTION: "yellow",
-    STATUS_SCHOLARSHIP: "magenta",
+    STATUS_ATTENTION: "cyan",
+    STATUS_SCHOLARSHIP: "bold yellow",
     STATUS_EXPULSION: "bold red",
 }
+
+
+def _row_style(status: str) -> str | None:
+    if status == STATUS_EXPULSION:
+        return "bold red"
+    if status == STATUS_SCHOLARSHIP:
+        return "bold yellow"
+    return None
 
 
 def _bar(percent: float, width: int = 10) -> Text:
@@ -81,22 +91,23 @@ def render_home(console: Console, dataset: Dataset) -> None:
     headline.append("Аналитика и администрирование учебного заведения\n", style="cyan")
     headline.append(
         "Лишение стипендии не отчисляет. Отчисление снимает и стипендию.\n",
-        style="yellow",
+        style="white",
     )
     headline.append(f"Журнал {dataset.source_name}\n", style="dim")
     headline.append(
         f"Групп {len(summary.groups)}    студентов {summary.headcount}    "
-        f"пропуски {summary.absence_percent:.1f}%\n",
+        f"пропуски {format_percent(summary.absence_percent)}%\n",
         style="white",
     )
     bar = _bar(summary.absence_percent)
     bar.style = "bright_cyan"
     headline.append(bar)
-    headline.append(
-        f"\nОтстающие {summary.lagging}    только стипендия {summary.scholarship}    "
-        f"отчисление {summary.expulsion}",
-        style="white",
-    )
+    headline.append("\nОтстающие ", style="white")
+    headline.append(str(summary.lagging), style="cyan")
+    headline.append("    только стипендия ", style="white")
+    headline.append(str(summary.scholarship), style="bold yellow")
+    headline.append("    отчисление ", style="white")
+    headline.append(str(summary.expulsion), style="bold red")
     console.print(Panel(headline, box=box.DOUBLE, border_style="bright_cyan", padding=(1, 2)))
     console.print(_groups_table(dataset))
     menu = Table.grid(padding=(0, 2))
@@ -142,10 +153,10 @@ def _groups_table(dataset: Dataset) -> Table:
             str(index),
             group.code,
             str(group.headcount),
-            _paint(group.absence_percent, dataset, f"{group.absence_percent:.1f}"),
+            _paint(group.absence_percent, dataset, format_percent(group.absence_percent)),
             bar,
             str(group.attention),
-            str(group.scholarship),
+            Text(str(group.scholarship), style="bold yellow" if group.scholarship else "green"),
             Text(str(group.expulsion), style="bold red" if group.expulsion else "green"),
         )
     return table
@@ -153,7 +164,7 @@ def _groups_table(dataset: Dataset) -> Table:
 
 def _students_table(group: GroupSummary, dataset: Dataset) -> Table:
     table = Table(
-        title=f"{group.code}  ·  пропуски {group.absence_percent:.1f}%  ·  {group.headcount} студентов",
+        title=f"{group.code}  ·  пропуски {format_percent(group.absence_percent)}%  ·  {group.headcount} студентов",
         box=box.ROUNDED,
         header_style="bold bright_white on dark_cyan",
         border_style="bright_cyan",
@@ -162,7 +173,6 @@ def _students_table(group: GroupSummary, dataset: Dataset) -> Table:
     )
     table.add_column("№", justify="right", width=3, no_wrap=True, style="bold bright_cyan")
     table.add_column("Студент", min_width=28, no_wrap=True)
-    table.add_column("Проп.", justify="right", width=5, no_wrap=True)
     table.add_column("%", justify="right", width=5, no_wrap=True)
     table.add_column("Шкала", width=10, no_wrap=True)
     table.add_column("Статус", min_width=18, no_wrap=True)
@@ -173,10 +183,10 @@ def _students_table(group: GroupSummary, dataset: Dataset) -> Table:
         table.add_row(
             str(index),
             student.full_name,
-            f"{student.absences}/{student.lessons_total}",
-            _paint(student.absence_percent, dataset, f"{student.absence_percent:.1f}"),
+            _paint(student.absence_percent, dataset, format_percent(student.absence_percent)),
             bar,
             _status_text(status),
+            style=_row_style(status),
         )
     return table
 
@@ -193,6 +203,38 @@ def _resolve_group(dataset: Dataset, raw: str) -> GroupSummary | None:
     return None
 
 
+def _marked_table(students, dataset: Dataset, title: str) -> Table:
+    table = Table(
+        title=title,
+        box=box.ROUNDED,
+        header_style="bold bright_white on dark_cyan",
+        border_style="bright_cyan",
+        expand=False,
+        padding=(0, 1),
+    )
+    table.add_column("Студент", min_width=28, no_wrap=True)
+    table.add_column("Группа", width=11, no_wrap=True)
+    table.add_column("%", justify="right", width=5, no_wrap=True)
+    table.add_column("Статус", min_width=18, no_wrap=True)
+    for student in students:
+        status = classify(student.absence_percent, dataset.rules)
+        table.add_row(
+            student.full_name,
+            student.group,
+            format_percent(student.absence_percent),
+            STATUS_LABELS[status],
+            style=_row_style(status),
+        )
+    return table
+
+
+def _show_marked(console: Console, title: str, students, dataset: Dataset, note: str) -> None:
+    _clear(console)
+    console.print(Panel(note, title=title, border_style="bright_cyan", box=box.ROUNDED))
+    console.print(_marked_table(students, dataset, title))
+    _pause(console)
+
+
 def _show_text(console: Console, title: str, text: str) -> None:
     console.clear()
     console.print(Panel(text, title=title, border_style="cyan", box=box.ROUNDED))
@@ -207,10 +249,14 @@ def browse_group(console: Console, dataset: Dataset, group: GroupSummary) -> Non
     """
     while True:
         _clear(console)
+        console.print(
+            Panel(describe_group(group.code), border_style="bright_cyan", box=box.ROUNDED)
+        )
         console.print(_students_table(group, dataset))
         console.print(
-            f"[dim]Внимание {group.attention} · стипендия {group.scholarship} · "
-            f"отчисление {group.expulsion}. Номер студента — карточка, 0 — к группам.[/dim]"
+            f"[dim]Внимание {group.attention} · [/dim][bold yellow]стипендия {group.scholarship}[/bold yellow]"
+            f"[dim] · [/dim][bold red]отчисление {group.expulsion}[/bold red]"
+            "[dim]. Номер студента — карточка, 0 — к группам.[/dim]"
         )
         raw = Prompt.ask("Студент").strip()
         if raw == "0":
@@ -220,7 +266,18 @@ def browse_group(console: Console, dataset: Dataset, group: GroupSummary) -> Non
             _pause(console)
             continue
         student = group.students[int(raw) - 1]
-        _show_text(console, student.full_name, format_student(student, dataset))
+        status = classify(student.absence_percent, dataset.rules)
+        border = "red" if status == STATUS_EXPULSION else "yellow" if status == STATUS_SCHOLARSHIP else "cyan"
+        _clear(console)
+        console.print(
+            Panel(
+                format_student(student, dataset),
+                title=student.full_name,
+                border_style=border,
+                box=box.ROUNDED,
+            )
+        )
+        _pause(console)
 
 
 def save_reports(dataset: Dataset, directory: Path) -> list[Path]:
@@ -248,14 +305,26 @@ def run_menu(dataset: Dataset) -> None:
     commands = {
         "сводка": lambda: _show_text(console, "Сводный административный отчёт", format_college(dataset)),
         "отстающие": lambda: _show_text(console, "Отстающие студенты", format_lagging(dataset)),
-        "стипендия": lambda: _show_text(console, "Отчёт для лишения стипендии", format_scholarship(dataset)),
-        "отчисление": lambda: _show_text(console, "Отчёт для отчисления", format_expulsion(dataset)),
+        "стипендия": lambda: _show_marked(
+            console,
+            "Отчёт для лишения стипендии",
+            students_at_least(dataset.students, dataset.rules, STATUS_SCHOLARSHIP),
+            dataset,
+            "Жёлтые остаются в колледже: их только лишают стипендии. Красных отчисляют, стипендию снимают тоже.",
+        ),
+        "отчисление": lambda: _show_marked(
+            console,
+            "Отчёт для отчисления",
+            students_at_least(dataset.students, dataset.rules, STATUS_EXPULSION),
+            dataset,
+            "Красным готовят отчисление. Тех, кого только лишают стипендии, в этом списке нет.",
+        ),
     }
     try:
         while True:
             _clear(console)
             render_home(console, dataset)
-            raw = Prompt.ask("Группа или команда").strip()
+            raw = Prompt.ask("№ группы в таблице").strip()
             key = raw.casefold()
             if key == "0":
                 console.print("Работа завершена.")
