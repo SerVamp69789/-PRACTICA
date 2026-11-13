@@ -60,7 +60,7 @@ def _ordered_groups(dataset: Dataset) -> list[GroupSummary]:
 
 def _clear(console: Console) -> None:
     try:
-        _clear(console)
+        console.clear()
     except (OSError, AttributeError):
         console.print()
 
