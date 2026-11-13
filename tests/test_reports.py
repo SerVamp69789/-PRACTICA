@@ -18,13 +18,27 @@ def dataset():
     return load_dataset(JOURNAL)
 
 
+NEW_GROUPS = {
+    "2ИП-4-25": 26,
+    "2ИП-5-25": 27,
+    "2ИП-6-25": 28,
+    "2ИП-7-25": 29,
+    "2ИП-8-25": 30,
+    "2РКИ-1-25": 28,
+    "2РКИ-2-25": 30,
+}
+
+
 def test_real_journal_shape(dataset):
-    assert dataset.source_name == "students.json"
-    assert len(dataset.students) == 84
+    assert dataset.source_name == "students.json + journal.xlsx"
     assert dataset.skipped_records == 0
     codes = {student.group for student in dataset.students}
-    assert codes == {"2ИП-1-25", "2ИП-2-25", "2ИП-3-25"}
+    assert {"2ИП-1-25", "2ИП-2-25", "2ИП-3-25"} <= codes
+    assert set(NEW_GROUPS) <= codes
+    for code, size in NEW_GROUPS.items():
+        assert sum(student.group == code for student in dataset.students) == size
     assert all(student.lessons_total == 10 for student in dataset.students)
+    assert len(dataset.students) == 84 + sum(NEW_GROUPS.values())
 
 
 def test_known_students_land_in_expected_lists(dataset):
@@ -41,18 +55,21 @@ def test_known_students_land_in_expected_lists(dataset):
 
     scholarship_text = format_scholarship(dataset)
     expulsion_text = format_expulsion(dataset)
+    assert "Лишение стипендии не означает отчисление" in scholarship_text
     assert "Фомин Юрий Ильич" in scholarship_text
     assert "Фомин Юрий Ильич" in expulsion_text
     assert "Морозова Мария Ивановна" in scholarship_text
     assert "Морозова Мария Ивановна" not in expulsion_text
     assert "Попов Жора Николаевич" not in scholarship_text
     assert "Попов Жора Николаевич" not in expulsion_text
+    assert expulsion.absences == 8
 
 
 def test_college_report_matches_raw_marks(dataset):
     text = format_college(dataset)
     missed = sum(student.absences for student in dataset.students)
-    assert "Студентов: 84" in text
+    assert f"Студентов: {len(dataset.students)}" in text
+    assert "2ИП-8-25" in text and "2РКИ-2-25" in text
     assert f"Пропусков: {missed}" in text
     assert "2ИП-1-25" in text and "2ИП-2-25" in text and "2ИП-3-25" in text
 

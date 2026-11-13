@@ -13,8 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY attendance ./attendance
 COPY tests ./tests
 COPY students.json .
+COPY journal.xlsx .
+COPY kontrol_poseshchaemosti.py .
 COPY README.md .
 
 RUN python -m pytest -q
 
-ENTRYPOINT ["python", "-m", "attendance"]
+ENTRYPOINT ["python", "kontrol_poseshchaemosti.py"]

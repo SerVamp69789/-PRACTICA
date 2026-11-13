@@ -23,7 +23,8 @@ def _rules_line(dataset: Dataset) -> str:
         "Пороги: отстающий ≥ "
         f"{rules.attention_percent:.0f}%, лишение стипендии ≥ "
         f"{rules.scholarship_percent:.0f}%, отчисление ≥ "
-        f"{rules.expulsion_percent:.0f}%."
+        f"{rules.expulsion_percent:.0f}%. "
+        "Лишение стипендии не означает отчисление. Отчисление означает и лишение стипендии."
     )
 
 
@@ -49,7 +50,8 @@ def format_college(dataset: Dataset) -> str:
     """
     summary = college_summary(dataset)
     lines = [
-        "СВОДНЫЙ ОТЧЁТ ПО КОЛЛЕДЖУ",
+        "СВОДНЫЙ АДМИНИСТРАТИВНЫЙ ОТЧЁТ",
+        "Агрегация по всем группам учебного заведения. Показатель — процент пропусков.",
         f"Источник: {dataset.source_name}",
         _rules_line(dataset),
         "",
@@ -60,8 +62,9 @@ def format_college(dataset: Dataset) -> str:
         f"Процент пропусков: {_percent(summary.absence_percent)}",
         f"Отстающие (от {dataset.rules.attention_percent:.0f}%): {summary.lagging}",
         f"    из них только внимание: {summary.attention}",
-        f"    лишение стипендии: {summary.scholarship}",
-        f"    отчисление: {summary.expulsion}",
+        f"    только лишение стипендии, без отчисления: {summary.scholarship}",
+        f"    отчисление, стипендия снимается тоже: {summary.expulsion}",
+        f"    в отчёте на стипендию вместе: {summary.scholarship + summary.expulsion}",
         "",
         "Группа       Студентов  Занятий  Пропусков  Процент  Внимание  Стипендия  Отчисление",
     ]
@@ -137,20 +140,37 @@ def format_lagging(dataset: Dataset) -> str:
     return "\n".join(lines)
 
 
+def _scholarship_parts(dataset: Dataset) -> tuple[tuple[StudentRecord, ...], tuple[StudentRecord, ...]]:
+    selected = students_at_least(dataset.students, dataset.rules, STATUS_SCHOLARSHIP)
+    only_scholarship = tuple(
+        student for student in selected if classify(student.absence_percent, dataset.rules) == STATUS_SCHOLARSHIP
+    )
+    expelled = tuple(
+        student for student in selected if classify(student.absence_percent, dataset.rules) == STATUS_EXPULSION
+    )
+    return only_scholarship, expelled
+
+
 def format_scholarship(dataset: Dataset) -> str:
     """Purpose: отчёт для лишения стипендии.
     Inputs: dataset — журнал.
-    Output: студенты с процентом пропусков не ниже порога стипендии.
-    Why: деканату нужен отдельный список, а не общий журнал.
+    Output: два списка — только стипендия и отчисленные, у которых стипендия снимается тоже.
+    Why: лишение стипендии само по себе не отчисляет, но отчисление без снятия стипендии не бывает.
     """
-    selected = students_at_least(dataset.students, dataset.rules, STATUS_SCHOLARSHIP)
+    only_scholarship, expelled = _scholarship_parts(dataset)
     lines = [
         "ОТЧЁТ ДЛЯ ЛИШЕНИЯ СТИПЕНДИИ",
-        f"Пропуски от {dataset.rules.scholarship_percent:.0f}%.",
-        "Студенты с порогом отчисления тоже включены: стипендия при отчислении не сохраняется.",
-        f"Человек в списке: {len(selected)}",
+        "Лишение стипендии не означает отчисление: эти студенты остаются в колледже.",
+        "Если студента отчисляют, стипендию снимают тоже. Такие люди перечислены отдельно и есть в отчёте на отчисление.",
+        f"Только лишение стипендии: {len(only_scholarship)}",
+        f"Отчисление, стипендия снимается вместе с ним: {len(expelled)}",
+        f"Всего в отчёте: {len(only_scholarship) + len(expelled)}",
         "",
-        *_student_lines(selected, dataset.rules),
+        "Только лишение стипендии",
+        *_student_lines(only_scholarship, dataset.rules),
+        "",
+        "Отчисление: стипендия снимается тоже",
+        *_student_lines(expelled, dataset.rules),
     ]
     return "\n".join(lines)
 
@@ -165,6 +185,8 @@ def format_expulsion(dataset: Dataset) -> str:
     lines = [
         "ОТЧЁТ ДЛЯ ОТЧИСЛЕНИЯ",
         f"Пропуски от {dataset.rules.expulsion_percent:.0f}%.",
+        "Студентов, которых только лишают стипендии, в этом списке нет.",
+        "Кого отчисляют — того лишают и стипендии. Они продублированы в отчёте на стипендию.",
         f"Человек в списке: {len(selected)}",
         "",
         *_student_lines(selected, dataset.rules),

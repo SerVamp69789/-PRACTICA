@@ -37,14 +37,32 @@ STATUS_STYLE = {
 }
 
 
-def _bar(percent: float, width: int = 10) -> str:
+def _bar(percent: float, width: int = 10) -> Text:
     filled = round(percent / 100 * width)
     filled = max(0, min(width, filled))
-    return "█" * filled + "░" * (width - filled)
+    return Text("█" * filled + "░" * (width - filled))
 
 
 def _status_text(status: str) -> Text:
     return Text(STATUS_LABELS[status], style=STATUS_STYLE[status])
+
+
+def _paint(percent: float, dataset: Dataset, label: str) -> Text:
+    status = classify(percent, dataset.rules)
+    return Text(label, style=STATUS_STYLE[status])
+
+
+def _ordered_groups(dataset: Dataset) -> list[GroupSummary]:
+    groups = list(college_summary(dataset).groups)
+    groups.sort(key=lambda group: group.code)
+    return groups
+
+
+def _clear(console: Console) -> None:
+    try:
+        _clear(console)
+    except (OSError, AttributeError):
+        console.print()
 
 
 def _pause(console: Console) -> None:
@@ -52,72 +70,83 @@ def _pause(console: Console) -> None:
 
 
 def render_home(console: Console, dataset: Dataset) -> None:
-    """Purpose: главный экран со сводкой колледжа и пунктами меню.
+    """Purpose: главный экран — список групп и команды административных отчётов.
     Inputs: console — вывод rich, dataset — журнал.
-    Output: ничего, рисует панель.
-    Why: администратор сразу видит масштаб проблемы, ещё не открывая группу.
+    Output: ничего, рисует панель и таблицу групп.
+    Why: задание просит меню со списком групп; номер группы открывает её студентов.
     """
     summary = college_summary(dataset)
     headline = Text()
-    headline.append("ДЕКАНАТ", style="bold cyan")
-    headline.append("  ·  контроль посещаемости\n", style="white")
-    headline.append(f"Журнал {dataset.source_name}", style="dim")
+    headline.append("СИСТЕМА КОНТРОЛЯ ПОСЕЩАЕМОСТИ\n", style="bold bright_white")
+    headline.append("Аналитика и администрирование учебного заведения\n", style="cyan")
     headline.append(
-        f"   ·   групп {len(summary.groups)}   ·   студентов {summary.headcount}\n",
+        "Лишение стипендии не отчисляет. Отчисление снимает и стипендию.\n",
+        style="yellow",
+    )
+    headline.append(f"Журнал {dataset.source_name}\n", style="dim")
+    headline.append(
+        f"Групп {len(summary.groups)}    студентов {summary.headcount}    "
+        f"пропуски {summary.absence_percent:.1f}%\n",
         style="white",
     )
-    headline.append(f"Пропуски {_bar(summary.absence_percent)}  {summary.absence_percent:.1f}%", style="cyan")
+    bar = _bar(summary.absence_percent)
+    bar.style = "bright_cyan"
+    headline.append(bar)
     headline.append(
-        f"    отстающие {summary.lagging}    стипендия {summary.scholarship}    отчисление {summary.expulsion}",
+        f"\nОтстающие {summary.lagging}    только стипендия {summary.scholarship}    "
+        f"отчисление {summary.expulsion}",
         style="white",
     )
-    console.print(Panel(headline, box=box.ROUNDED, border_style="cyan", padding=(1, 2)))
+    console.print(Panel(headline, box=box.DOUBLE, border_style="bright_cyan", padding=(1, 2)))
+    console.print(_groups_table(dataset))
     menu = Table.grid(padding=(0, 2))
     menu.add_column(style="bold cyan", justify="right")
     menu.add_column()
     items = [
-        ("1", "Группы колледжа"),
-        ("2", "Группа и список студентов"),
-        ("3", "Сводный отчёт"),
-        ("4", "Отстающие студенты"),
-        ("5", "Отчёт на лишение стипендии"),
-        ("6", "Отчёт на отчисление"),
-        ("7", "Сохранить отчёты в reports/"),
-        ("0", "Выход"),
+        ("номер", "список студентов выбранной группы"),
+        ("сводка", "сводный административный отчёт по всем группам"),
+        ("отстающие", "выявить отстающих студентов"),
+        ("стипендия", "отчёт для лишения стипендии"),
+        ("отчисление", "отчёт для отчисления"),
+        ("сохранить", "записать отчёты в reports/"),
+        ("0", "выход"),
     ]
     for key, label in items:
         menu.add_row(key, label)
-    console.print(Panel(menu, title="Меню", border_style="bright_black"))
+    console.print(Panel(menu, title="Команды", border_style="bright_black"))
 
 
 def _groups_table(dataset: Dataset) -> Table:
-    summary = college_summary(dataset)
     table = Table(
-        title="Группы",
-        box=box.SIMPLE_HEAVY,
-        header_style="bold cyan",
-        border_style="bright_black",
+        title="Группы колледжа",
+        caption="Номер открывает студентов. Стип. — только стипендия, без отчисления.",
+        box=box.ROUNDED,
+        header_style="bold bright_white on dark_cyan",
+        border_style="bright_cyan",
+        caption_style="dim",
+        expand=False,
+        padding=(0, 1),
     )
-    table.add_column("№", justify="right", style="dim")
-    table.add_column("Группа", style="bold")
-    table.add_column("Студентов", justify="right")
-    table.add_column("Пропусков", justify="right")
-    table.add_column("%", justify="right")
-    table.add_column("Шкала")
-    table.add_column("Внимание", justify="right")
-    table.add_column("Стипендия", justify="right")
-    table.add_column("Отчисление", justify="right")
-    for index, group in enumerate(summary.groups, start=1):
+    table.add_column("№", justify="right", width=3, no_wrap=True, style="bold bright_cyan")
+    table.add_column("Группа", width=11, no_wrap=True, style="bold")
+    table.add_column("Чел.", justify="right", width=4, no_wrap=True)
+    table.add_column("%", justify="right", width=5, no_wrap=True)
+    table.add_column("Шкала", width=10, no_wrap=True)
+    table.add_column("Вним.", justify="right", width=5, no_wrap=True)
+    table.add_column("Стип.", justify="right", width=5, no_wrap=True)
+    table.add_column("Отч.", justify="right", width=4, no_wrap=True)
+    for index, group in enumerate(_ordered_groups(dataset), start=1):
+        bar = _bar(group.absence_percent)
+        bar.style = STATUS_STYLE[classify(group.absence_percent, dataset.rules)]
         table.add_row(
             str(index),
             group.code,
             str(group.headcount),
-            f"{group.absences}/{group.lessons_total}",
-            f"{group.absence_percent:.1f}",
-            _bar(group.absence_percent),
+            _paint(group.absence_percent, dataset, f"{group.absence_percent:.1f}"),
+            bar,
             str(group.attention),
             str(group.scholarship),
-            str(group.expulsion),
+            Text(str(group.expulsion), style="bold red" if group.expulsion else "green"),
         )
     return table
 
@@ -125,33 +154,35 @@ def _groups_table(dataset: Dataset) -> Table:
 def _students_table(group: GroupSummary, dataset: Dataset) -> Table:
     table = Table(
         title=f"{group.code}  ·  пропуски {group.absence_percent:.1f}%  ·  {group.headcount} студентов",
-        box=box.SIMPLE_HEAVY,
-        header_style="bold cyan",
-        border_style="bright_black",
+        box=box.ROUNDED,
+        header_style="bold bright_white on dark_cyan",
+        border_style="bright_cyan",
+        expand=False,
+        padding=(0, 1),
     )
-    table.add_column("№", justify="right", style="dim")
-    table.add_column("Студент")
-    table.add_column("Был", justify="right")
-    table.add_column("Пропусков", justify="right")
-    table.add_column("%", justify="right")
-    table.add_column("Шкала")
-    table.add_column("Статус")
+    table.add_column("№", justify="right", width=3, no_wrap=True, style="bold bright_cyan")
+    table.add_column("Студент", min_width=28, no_wrap=True)
+    table.add_column("Проп.", justify="right", width=5, no_wrap=True)
+    table.add_column("%", justify="right", width=5, no_wrap=True)
+    table.add_column("Шкала", width=10, no_wrap=True)
+    table.add_column("Статус", min_width=18, no_wrap=True)
     for index, student in enumerate(group.students, start=1):
         status = classify(student.absence_percent, dataset.rules)
+        bar = _bar(student.absence_percent)
+        bar.style = STATUS_STYLE[status]
         table.add_row(
             str(index),
             student.full_name,
-            str(student.presents),
             f"{student.absences}/{student.lessons_total}",
-            f"{student.absence_percent:.1f}",
-            _bar(student.absence_percent),
+            _paint(student.absence_percent, dataset, f"{student.absence_percent:.1f}"),
+            bar,
             _status_text(status),
         )
     return table
 
 
 def _resolve_group(dataset: Dataset, raw: str) -> GroupSummary | None:
-    groups = college_summary(dataset).groups
+    groups = _ordered_groups(dataset)
     if raw.isdigit():
         number = int(raw)
         if 1 <= number <= len(groups):
@@ -175,7 +206,7 @@ def browse_group(console: Console, dataset: Dataset, group: GroupSummary) -> Non
     Why: задание просит после выбора группы показать список студентов.
     """
     while True:
-        console.clear()
+        _clear(console)
         console.print(_students_table(group, dataset))
         console.print(
             f"[dim]Внимание {group.attention} · стипендия {group.scholarship} · "
@@ -190,26 +221,6 @@ def browse_group(console: Console, dataset: Dataset, group: GroupSummary) -> Non
             continue
         student = group.students[int(raw) - 1]
         _show_text(console, student.full_name, format_student(student, dataset))
-
-
-def browse_groups(console: Console, dataset: Dataset) -> None:
-    """Purpose: экран списка групп и переход в выбранную.
-    Inputs: console, dataset.
-    Output: ничего.
-    Why: вход в систему для администратора — обзор групп, а не плоский список всех людей.
-    """
-    while True:
-        console.clear()
-        console.print(_groups_table(dataset))
-        raw = Prompt.ask("Номер или код группы, 0 — в меню").strip()
-        if raw == "0":
-            return
-        group = _resolve_group(dataset, raw)
-        if group is None:
-            console.print("[red]Такой группы нет.[/red]")
-            _pause(console)
-            continue
-        browse_group(console, dataset, group)
 
 
 def save_reports(dataset: Dataset, directory: Path) -> list[Path]:
@@ -228,35 +239,42 @@ def save_reports(dataset: Dataset, directory: Path) -> list[Path]:
 
 
 def run_menu(dataset: Dataset) -> None:
-    """Purpose: цикл главного меню.
+    """Purpose: цикл меню: группа открывает студентов, команды открывают отчёты.
     Inputs: dataset — загруженный журнал.
-    Output: ничего, завершается по пункту «Выход» или Ctrl+C.
-    Why: это рабочее место администратора, а не одноразовый вывод таблицы.
+    Output: ничего, завершается по команде «0» или Ctrl+C.
+    Why: администратор с первого экрана видит группы и сразу выбирает одну из них.
     """
-    console = Console()
+    console = Console(highlight=False)
+    commands = {
+        "сводка": lambda: _show_text(console, "Сводный административный отчёт", format_college(dataset)),
+        "отстающие": lambda: _show_text(console, "Отстающие студенты", format_lagging(dataset)),
+        "стипендия": lambda: _show_text(console, "Отчёт для лишения стипендии", format_scholarship(dataset)),
+        "отчисление": lambda: _show_text(console, "Отчёт для отчисления", format_expulsion(dataset)),
+    }
     try:
         while True:
-            console.clear()
+            _clear(console)
             render_home(console, dataset)
-            choice = Prompt.ask("Пункт", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="1")
-            if choice == "0":
+            raw = Prompt.ask("Группа или команда").strip()
+            key = raw.casefold()
+            if key == "0":
                 console.print("Работа завершена.")
                 return
-            if choice in {"1", "2"}:
-                browse_groups(console, dataset)
-            elif choice == "3":
-                _show_text(console, "Сводный отчёт", format_college(dataset))
-            elif choice == "4":
-                _show_text(console, "Отстающие", format_lagging(dataset))
-            elif choice == "5":
-                _show_text(console, "Лишение стипендии", format_scholarship(dataset))
-            elif choice == "6":
-                _show_text(console, "Отчисление", format_expulsion(dataset))
-            elif choice == "7":
+            if key in commands:
+                commands[key]()
+                continue
+            if key == "сохранить":
                 paths = save_reports(dataset, Path("reports"))
                 console.print(f"[green]Записано файлов: {len(paths)}[/green]")
                 for path in paths:
                     console.print(f"  {path}")
                 _pause(console)
+                continue
+            group = _resolve_group(dataset, raw)
+            if group is None:
+                console.print("[red]Нет такой группы или команды.[/red]")
+                _pause(console)
+                continue
+            browse_group(console, dataset, group)
     except (KeyboardInterrupt, EOFError):
         console.print("\nВыход.")
