@@ -12,19 +12,28 @@
 Журнал — students.json. Запуск: python kontrol_poseshchaemosti.py
 """
 
-import argparse
-import sys
-from pathlib import Path
+import argparse   # разбор аргументов командной строки (запуск скрипта с флагами, например --report group)
+import sys        # системные функции: выход с кодом ошибки (sys.exit), потоки stdout/stderr
+from pathlib import Path  # работа с путями к файлам/папкам в кроссплатформенном виде
 
+# Ключевая функция аналитики: собирает сводку по всему колледжу.
+# JournalError — своё исключение модуля: ошибка данных журнала (битый файл, нехватка полей и т. п.)
 from attendance.analytics import JournalError, college_summary
+
+# Формирователи отчётов — каждый превращает данные в готовый текст для вывода/сохранения
 from attendance.reports import (
-    format_college,
-    format_expulsion,
-    format_group,
-    format_lagging,
-    format_scholarship,
+    format_college,       # сводный отчёт по колледжу целиком
+    format_expulsion,     # отчёт по студентам под угрозой отчисления
+    format_group,         # отчёт по конкретной группе
+    format_lagging,       # отчёт по отстающим студентам
+    format_scholarship,   # отчёт по стипендии (кому назначена/снята)
 )
+
+# Загрузка исходных данных (журнала посещаемости) в Dataset из хранилища — файла или БД
 from attendance.storage import load_dataset
+
+# Интерфейс пользователя: интерактивное меню в терминале (run_menu)
+# и сохранение готовых отчётов в файлы (save_reports)
 from attendance.ui import run_menu, save_reports
 
 REPORTS = {
